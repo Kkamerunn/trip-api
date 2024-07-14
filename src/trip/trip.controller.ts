@@ -3,14 +3,14 @@ import {
   Get,
   Post,
   Body,
-  Patch,
-  Param,
-  Delete,
   Query,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { TripService } from './trip.service';
 import { Trip } from './entities/trip.entity';
 import { Reading } from '../reading/entities/reading.entity';
+import { CreateTripDto } from './dto/create-trip.dto';
 
 @Controller('trip')
 export class TripController {
@@ -28,8 +28,25 @@ export class TripController {
     return await this.tripService.getTrips(filters, limit, offset);
   }
 
+  @Get('test')
+  async testDatabaseConnection(): Promise<string> {
+    const trips = await this.tripService.findAll({});
+    return trips.length > 0
+      ? 'Database connection is working!'
+      : 'No trips found, but connection is working!';
+  }
+
   @Post()
-  async createTrip(@Body() readings: Reading[]): Promise<Trip> {
-    return await this.tripService.createTrip(readings);
+  async create(@Body() createTripDto: CreateTripDto): Promise<Trip> {
+    return this.tripService.create(createTripDto);
+  }
+
+  @Post('create-from-readings')
+  async createFromReadings(): Promise<Trip[]> {
+    try {
+      return await this.tripService.createTripsFromReadings();
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    }
   }
 }

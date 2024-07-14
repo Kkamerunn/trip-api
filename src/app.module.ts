@@ -1,8 +1,6 @@
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { Module } from '@nestjs/common';
-import { Reading } from './reading/entities/reading.entity';
-import { ReadingModule } from './reading/reading.module';
 import { Trip } from './trip/entities/trip.entity';
 import { TripModule } from './trip/trip.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -16,11 +14,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       username: 'user',
       password: 'password',
       database: 'trip_db',
-      entities: [Trip, Reading],
+      entities: [Trip],
       synchronize: true, // solo para desarrollo, para no tener que usar migraciones
     }),
     TripModule,
-    ReadingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

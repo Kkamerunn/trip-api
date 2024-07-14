@@ -1,26 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { CreateReadingDto } from './dto/create-reading.dto';
-import { UpdateReadingDto } from './dto/update-reading.dto';
+import axios from 'axios';
 
 @Injectable()
 export class ReadingService {
-  create(createReadingDto: CreateReadingDto) {
-    return 'This action adds a new reading';
-  }
-
-  findAll() {
-    return `This action returns all reading`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} reading`;
-  }
-
-  update(id: number, updateReadingDto: UpdateReadingDto) {
-    return `This action updates a #${id} reading`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} reading`;
+  async getReadings(): Promise<any[]> {
+    const url = `https://virtserver.swaggerhub.com/CONTABILIDAD/JooycarTest/1.0.0/api/trips/v1`;
+    try {
+      const response = await axios.get(url);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting readings:', error);
+      throw new Error('Error getting readings');
+    }
   }
 }

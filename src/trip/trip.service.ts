@@ -3,15 +3,18 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Trip } from './entities/trip.entity';
 import { Repository } from 'typeorm';
 import { Reading } from '../reading/entities/reading.entity';
-import { getAddressFromCoordinates } from '../lib/utils/utils';
+//import { getAddressFromCoordinates } from '../lib/utils/utils';
+import { ReadingService } from 'src/reading/reading.service';
+import { CreateTripDto } from './dto/create-trip.dto';
+import * as geolib from 'geolib';
 
 @Injectable()
 export class TripService {
   constructor(
     @InjectRepository(Trip)
-    private tripRepository: Repository<Trip>,
+    private readonly tripRepository: Repository<Trip>,
     @InjectRepository(Reading)
-    private readingRepository: Repository<Reading>,
+    private readonly readingService: ReadingService,
   ) {}
 
   async getTrips(filters: any, limit: number, offset: number): Promise<Trip[]> {
@@ -40,48 +43,75 @@ export class TripService {
     return await query.getMany();
   }
 
-  async createTrip(readings: Reading[]): Promise<Trip> {
-    if (readings.length < 5 || readings.some((reading) => !reading.time)) {
-      throw new Error('Invalid readings');
+  async findAll(query: any): Promise<Trip[]> {
+    return this.tripRepository.find();
+  }
+
+  async create(createTripDto: CreateTripDto): Promise<Trip> {
+    const trip = this.tripRepository.create(createTripDto);
+    return this.tripRepository.save(trip);
+  }
+
+  async createTripsFromReadings(): Promise<Trip[]> {
+    const readings = await this.readingService.getReadings();
+    if (readings.length < 5) {
+      throw new Error(
+        'Para construir el viaje deben haber por lo menos 5 readings',
+      );
     }
 
-    const startReading = readings.reduce((prev, curr) =>
-      prev.time < curr.time ? prev : curr,
-    );
-    const endReading = readings.reduce((prev, curr) =>
-      prev.time > curr.time ? prev : curr,
+    // Ordenar los readings por tiempo
+    readings.sort(
+      (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
     );
 
-    // const startAddress = await getAddressFromCoordinates(
-    //   startReading.lat,
-    //   startReading.lon,
-    // );
-    // const endAddress = await getAddressFromCoordinates(
-    //   endReading.lat,
-    //   endReading.lon,
-    // );
+    const start = readings[0];
+    const end = readings[readings.length - 1];
+    const duration =
+      new Date(end.time).getTime() - new Date(start.time).getTime();
+    const distance = geolib.getDistance(
+      { latitude: start.lat, longitude: start.lon },
+      { latitude: end.lat, longitude: end.lon },
+    );
+    const overspeedsCount = this.calculateOverspeedsCount(readings);
+    const boundingBox = geolib.getBounds(
+      readings.map((r) => ({ latitude: r.lat, longitude: r.lon })),
+    );
 
-    const trip = new Trip();
-    // trip.start = { ...startReading, address: startAddress };
-    // trip.end = { ...endReading, address: endAddress };
-    // trip.duration = endReading.time - startReading.time;
-    // trip.distance = readings.reduce(
-    //   (total, reading) => total + reading.distance,
-    //   0,
-    // );
-    trip.overspeedsCount = this.calculateOverspeedsCount(readings);
-    // trip.boundingBox = this.calculateBoundingBox(readings);
+    const boundingBoxArray = [
+      { lat: boundingBox.minLat, lon: boundingBox.minLng },
+      { lat: boundingBox.minLat, lon: boundingBox.maxLng },
+      { lat: boundingBox.maxLat, lon: boundingBox.minLng },
+      { lat: boundingBox.maxLat, lon: boundingBox.maxLng },
+    ];
 
-    return await this.tripRepository.save(trip);
+    const trip = this.tripRepository.create({
+      start: new Date(start.time),
+      end: new Date(end.time),
+      distance,
+      duration,
+      overspeedsCount,
+      boundingBox: boundingBoxArray,
+    });
+
+    return [await this.tripRepository.save(trip)];
   }
 
-  private calculateOverspeedsCount(readings: Reading[]): number {
-    // Implementar la lógica para calcular los overspeedsCount
-    return 0;
-  }
+  private calculateOverspeedsCount(readings: any[]): number {
+    let overspeedsCount = 0;
+    let inOverspeed = false;
 
-  private calculateBoundingBox(readings: Reading[]): string[] {
-    // Implementar la lógica para calcular el bounding box
-    return [''];
+    for (const reading of readings) {
+      if (reading.speed > reading.speedLimit) {
+        if (!inOverspeed) {
+          inOverspeed = true;
+          overspeedsCount++;
+        }
+      } else {
+        inOverspeed = false;
+      }
+    }
+
+    return overspeedsCount;
   }
 }
